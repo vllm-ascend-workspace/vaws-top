@@ -47,7 +47,7 @@ npm run serve:local
 Agent 可直接查询已采集的缓存：
 
 ```bash
-python3 scripts/vaws-top.py npu 10.18.4.21
+python3 scripts/vaws-top.py npu 192.0.2.21
 ```
 
 开发时分别运行：
@@ -92,7 +92,7 @@ Windows 版本使用当前用户的任务计划程序在登录后启动，异常
 
 ```text
 名称, 主机, SSH端口, SSH用户, 标签1|标签2
-atlas-a3-01, 10.18.4.21, 22, root, A3|训练
+example-a3-01, 192.0.2.21, 22, root, A3|训练
 ```
 
 密码候选一行一个。服务对每台尚未配置密钥的主机按顺序尝试，成功即停止；请求完成后不保留候选密码。

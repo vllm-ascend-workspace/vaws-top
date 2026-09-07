@@ -8,21 +8,21 @@
 
 ```bash
 python3 scripts/vaws-top.py servers
-python3 scripts/vaws-top.py npu 10.18.4.21
-python3 scripts/vaws-top.py npu 10.18.4.21 --live
-python3 scripts/vaws-top.py npu 10.18.4.21 --ultra-compact
-python3 scripts/vaws-top.py --json npu 10.18.4.21 --processes
-python3 scripts/vaws-top.py status 10.18.4.21
-python3 scripts/vaws-top.py status 10.18.4.21 --cache
-python3 scripts/vaws-top.py mounts 10.18.4.21 --live
+python3 scripts/vaws-top.py npu 192.0.2.21
+python3 scripts/vaws-top.py npu 192.0.2.21 --live
+python3 scripts/vaws-top.py npu 192.0.2.21 --ultra-compact
+python3 scripts/vaws-top.py --json npu 192.0.2.21 --processes
+python3 scripts/vaws-top.py status 192.0.2.21
+python3 scripts/vaws-top.py status 192.0.2.21 --cache
+python3 scripts/vaws-top.py mounts 192.0.2.21 --live
 python3 scripts/vaws-top.py capacity --min-idle 4 --max-age 180 --tag A3
 ```
 
 默认输出只保留状态、缓存年龄、忙闲卡数、AICore、HBM、进程数和归属：
 
 ```text
-10.18.4.21 online age=4s npu=8 busy=2 util=24.5% hbm=96.0G/512.0G
-0 busy util=91% hbm=41.2G/64.0G proc=1 owner=q00946761,wbj
+192.0.2.21 online age=4s npu=8 busy=2 util=24.5% hbm=96.0G/512.0G
+0 busy util=91% hbm=41.2G/64.0G proc=1 owner=x01234567,xyz
 1 idle util=0% hbm=5.9G/64.0G proc=0 owner=-
 ```
 
@@ -57,9 +57,9 @@ Windows 可将 `command` 换成已安装的 `python.exe` 绝对路径。服务�
 
 ```text
 GET /api/agent/servers
-GET /api/agent/npu?host=10.18.4.21&mode=cache
-GET /api/agent/npu?host=10.18.4.21&mode=live&processes=1&details=1
-GET /api/agent/server?host=10.18.4.21&mode=cache
+GET /api/agent/npu?host=192.0.2.21&mode=cache
+GET /api/agent/npu?host=192.0.2.21&mode=live&processes=1&details=1
+GET /api/agent/server?host=192.0.2.21&mode=cache
 GET /api/agent/capacity?min_idle_npus=4&max_age_seconds=180&tags=A3
 ```
 

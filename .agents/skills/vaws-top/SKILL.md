@@ -27,7 +27,7 @@ Use the running local monitor as the single server-status interface. Run command
 2. Inspect a candidate from cache:
 
    ```bash
-   python3 scripts/vaws-top.py status 10.18.4.21 --cache
+   python3 scripts/vaws-top.py status 192.0.2.21 --cache
    ```
 
    The compact result includes NPU/HBM, CPU, memory, disk pressure, Docker count, grouped NPU processes, containers, extracted employee IDs or initials, and likely model-weight mounts.
@@ -35,7 +35,7 @@ Use the running local monitor as the single server-status interface. Run command
 3. Inspect storage when model placement matters:
 
    ```bash
-   python3 scripts/vaws-top.py mounts 10.18.4.21
+   python3 scripts/vaws-top.py mounts 192.0.2.21
    ```
 
    Default text hides pseudo and container-overlay filesystems. JSON/MCP structured results retain the full mount list. `weight_candidate` is a heuristic; it does not recursively scan the remote filesystem.
@@ -43,7 +43,7 @@ Use the running local monitor as the single server-status interface. Run command
 4. Immediately before choosing the server, refresh only that host:
 
    ```bash
-   python3 scripts/vaws-top.py status 10.18.4.21 --timeout 30
+   python3 scripts/vaws-top.py status 192.0.2.21 --timeout 30
    ```
 
 Do not follow a successful live result with a duplicate raw SSH occupancy query.
@@ -52,10 +52,10 @@ Do not follow a successful live result with a duplicate raw SSH occupancy query.
 
 ```bash
 python3 scripts/vaws-top.py servers
-python3 scripts/vaws-top.py npu 10.18.4.21
-python3 scripts/vaws-top.py npu 10.18.4.21 --ultra-compact
-python3 scripts/vaws-top.py --json npu 10.18.4.21 --processes
-python3 scripts/vaws-top.py --json npu 10.18.4.21 --process-details
+python3 scripts/vaws-top.py npu 192.0.2.21
+python3 scripts/vaws-top.py npu 192.0.2.21 --ultra-compact
+python3 scripts/vaws-top.py --json npu 192.0.2.21 --processes
+python3 scripts/vaws-top.py --json npu 192.0.2.21 --process-details
 ```
 
 - Add top-level `--json` for stable machine-readable output.

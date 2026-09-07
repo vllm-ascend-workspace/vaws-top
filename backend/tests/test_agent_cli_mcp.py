@@ -26,10 +26,10 @@ MCP = load_script("vaws-top-mcp.py")
 CLI = load_script("vaws-top.py")
 PAYLOAD = {
     "source": "cache",
-    "server": {"id": "s1", "name": "a3", "host": "10.0.0.8", "enabled": True, "tags": [], "status": "online"},
+    "server": {"id": "s1", "name": "a3", "host": "198.51.100.8", "enabled": True, "tags": [], "status": "online"},
     "collected_at": 10, "age_seconds": 2,
     "summary": {"npu_count": 1, "busy_npu_count": 1, "idle_npu_count": 0, "aicore_percent": 72, "hbm_used_mb": 32768, "hbm_total_mb": 65536},
-    "devices": [{"id": 0, "aicore_percent": 72, "hbm_used_mb": 32768, "hbm_total_mb": 65536, "busy": True, "process_count": 1, "containers": ["vllm"], "owners": ["wbj"]}],
+    "devices": [{"id": 0, "aicore_percent": 72, "hbm_used_mb": 32768, "hbm_total_mb": 65536, "busy": True, "process_count": 1, "containers": ["vllm"], "owners": ["xyz"]}],
 }
 
 
@@ -51,15 +51,15 @@ class FakeClient:
 
 class AgentCliMcpTests(unittest.TestCase):
     def test_status_defaults_to_live_with_explicit_cache_override(self) -> None:
-        self.assertEqual(CLI.parser().parse_args(["status", "10.0.0.8"]).mode, "live")
-        self.assertEqual(CLI.parser().parse_args(["status", "10.0.0.8", "--live"]).mode, "live")
-        self.assertEqual(CLI.parser().parse_args(["status", "10.0.0.8", "--cache"]).mode, "cache")
+        self.assertEqual(CLI.parser().parse_args(["status", "198.51.100.8"]).mode, "live")
+        self.assertEqual(CLI.parser().parse_args(["status", "198.51.100.8", "--live"]).mode, "live")
+        self.assertEqual(CLI.parser().parse_args(["status", "198.51.100.8", "--cache"]).mode, "cache")
 
     def test_default_formatter_is_compact_and_decision_focused(self) -> None:
         output = format_npu(PAYLOAD)
         self.assertEqual(len(output.splitlines()), 2)
-        self.assertIn("10.0.0.8 online age=2s npu=1 busy=1", output)
-        self.assertIn("0 busy util=72% hbm=32.0G/64.0G proc=1 owner=wbj", output)
+        self.assertIn("198.51.100.8 online age=2s npu=1 busy=1", output)
+        self.assertIn("0 busy util=72% hbm=32.0G/64.0G proc=1 owner=xyz", output)
 
     def test_mount_formatter_hides_virtual_and_container_filesystems(self) -> None:
         output = format_mounts({"storage": {"mounts": [
@@ -73,7 +73,7 @@ class AgentCliMcpTests(unittest.TestCase):
         self.assertNotIn("/proc", output)
 
     def test_server_formatter_groups_same_owner_container_processes(self) -> None:
-        process = {"pid": 11, "name": "Worker", "container": "vllm", "owners": ["q00946761"], "npu_memory_mb": 1024}
+        process = {"pid": 11, "name": "Worker", "container": "vllm", "owners": ["x01234567"], "npu_memory_mb": 1024}
         payload = {
             **PAYLOAD, "system": {}, "storage": {"mounts": []},
             "devices": [
@@ -82,12 +82,12 @@ class AgentCliMcpTests(unittest.TestCase):
             ],
         }
         output = format_server(payload)
-        self.assertIn("proc x2 npu_mem=2.0G container=vllm owner=q00946761 name=Worker pids=11,12", output)
+        self.assertIn("proc x2 npu_mem=2.0G container=vllm owner=x01234567 name=Worker pids=11,12", output)
         self.assertEqual(sum(line.startswith("proc ") for line in output.splitlines()), 1)
 
     def test_client_rejects_remote_endpoint_by_default(self) -> None:
         with self.assertRaises(ClientError):
-            VawsTopClient("http://10.0.0.8:8789")
+            VawsTopClient("http://198.51.100.8:8789")
         VawsTopClient("http://localhost:9999")
 
     def test_client_explicitly_bypasses_environment_proxies(self) -> None:
@@ -101,7 +101,7 @@ class AgentCliMcpTests(unittest.TestCase):
         response = mock.MagicMock()
         response.__enter__.return_value.read.return_value = b'{"server":{}}'
         with mock.patch.object(client.opener, "open", return_value=response) as opened:
-            client.server("10.0.0.8", mode="live", timeout=30)
+            client.server("198.51.100.8", mode="live", timeout=30)
         self.assertEqual(opened.call_args.kwargs["timeout"], 32)
 
     def test_legacy_mcp_lists_and_calls_tools(self) -> None:
@@ -112,7 +112,7 @@ class AgentCliMcpTests(unittest.TestCase):
         )
         called = MCP.handle_request({
             "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-            "params": {"name": "npu_status", "arguments": {"host": "10.0.0.8"}},
+            "params": {"name": "npu_status", "arguments": {"host": "198.51.100.8"}},
         }, FakeClient())
         self.assertFalse(called["result"]["isError"])
         self.assertEqual(called["result"]["structuredContent"]["source"], "cache")
@@ -128,7 +128,7 @@ class AgentCliMcpTests(unittest.TestCase):
     def test_mcp_stale_cache_is_actionable_without_refresh(self) -> None:
         request = {
             "jsonrpc": "2.0", "id": 4, "method": "tools/call",
-            "params": {"name": "npu_status", "arguments": {"host": "10.0.0.8", "max_age_seconds": 1}},
+            "params": {"name": "npu_status", "arguments": {"host": "198.51.100.8", "max_age_seconds": 1}},
         }
         response = MCP.handle_request(request, FakeClient())
         self.assertTrue(response["result"]["isError"])

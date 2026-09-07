@@ -18,7 +18,7 @@ class DatabaseTests(unittest.TestCase):
         self.temp.cleanup()
 
     def test_server_sample_and_history(self) -> None:
-        server = self.db.upsert_server({"id":"s1","name":"a3","host":"10.0.0.1","port":22,"username":"root","tags":["A3"]})
+        server = self.db.upsert_server({"id":"s1","name":"a3","host":"198.51.100.1","port":22,"username":"root","tags":["A3"]})
         now = int(time.time())
         snapshot = {
             "collected_at": now, "duration_ms": 12,

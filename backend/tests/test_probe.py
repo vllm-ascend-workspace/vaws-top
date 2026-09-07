@@ -72,11 +72,11 @@ class ProbeTests(unittest.TestCase):
             encoded("/usr/bin/python3"), encoded("python3"), encoded(f"0::/system.slice/docker-{container_id}.scope"),
         ]))
         devices = [{"processes": [{"pid": 421, "npu_process_name": "python3", "npu_memory_mb": 2048}]}]
-        attach_process_details(devices, details, {"containers": [{"id": container_id, "name": "vllm-a3", "image": "vllm:latest", "status": "Up"}]})
+        attach_process_details(devices, details, {"containers": [{"id": container_id, "name": "worker-01", "image": "vllm:latest", "status": "Up"}]})
         process = devices[0]["processes"][0]
         self.assertEqual(process["cwd"], "/workspace")
         self.assertEqual(process["command"], "python -m vllm.entrypoints.openai.api_server")
-        self.assertEqual(process["container"]["name"], "vllm-a3")
+        self.assertEqual(process["container"]["name"], "worker-01")
         self.assertEqual(process["npu_memory_mb"], 2048)
 
     def test_process_detail_script_only_contains_validated_pids(self) -> None:
@@ -87,16 +87,16 @@ class ProbeTests(unittest.TestCase):
 
     def test_ownership_labels_extract_employee_ids_and_initials(self) -> None:
         labels = extract_ownership_labels(
-            "/home/q00946761/workspace/wbj/project/abc1234567",
-            "wbj_dsa_op_q00946761",
+            "/home/x01234567/workspace/xyz/project/abc1234567",
+            "xyz_pqr_uv_x01234567",
         )
         by_kind = {
             kind: [label["value"] for label in labels if label["kind"] == kind]
             for kind in ("employee_id", "initials")
         }
-        self.assertEqual(by_kind["employee_id"], ["q00946761", "abc1234567"])
-        self.assertEqual(by_kind["initials"], ["wbj", "dsa", "op"])
-        q_label = next(label for label in labels if label["value"] == "q00946761")
+        self.assertEqual(by_kind["employee_id"], ["x01234567", "abc1234567"])
+        self.assertEqual(by_kind["initials"], ["xyz", "pqr", "uv"])
+        q_label = next(label for label in labels if label["value"] == "x01234567")
         self.assertEqual(q_label["sources"], ["pwd", "container"])
 
     def test_ownership_label_boundaries_reject_overlong_candidates(self) -> None:
@@ -126,7 +126,7 @@ class ProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as state:
             project = Path(__file__).resolve().parents[2]
             adapter = WorkspaceDeviceAdapter(project, Path(state))
-            command = adapter.ssh_base({"host":"10.0.0.1","port":22,"username":"root"})
+            command = adapter.ssh_base({"host":"198.51.100.1","port":22,"username":"root"})
             option = next(command[index + 1] for index, value in enumerate(command) if value == "-o" and command[index + 1].startswith("ControlPath="))
             expanded = option.split("=", 1)[1].replace("%C", "x" * 40)
             self.assertLess(len(expanded), 100)
@@ -137,7 +137,7 @@ class ProbeTests(unittest.TestCase):
             adapter = WorkspaceDeviceAdapter(project, Path(state))
             adapter.is_windows = True
             with mock.patch.object(adapter, "ensure_key", return_value=adapter.private_key):
-                command = adapter.ssh_base({"host": "10.0.0.1", "port": 22, "username": "root"})
+                command = adapter.ssh_base({"host": "198.51.100.1", "port": 22, "username": "root"})
             rendered = " ".join(command)
             self.assertNotIn("ControlMaster", rendered)
             self.assertNotIn("ControlPersist", rendered)
@@ -184,11 +184,11 @@ class ProbeTests(unittest.TestCase):
             (inventory_dir / "machine-inventory.json").write_text(json.dumps({
                 "machines": [{
                     "alias": "active-a3",
-                    "host": {"ip": "10.0.0.1", "port": 22, "user": "root", "machine_type": "A3"},
+                    "host": {"ip": "198.51.100.1", "port": 22, "user": "root", "machine_type": "A3"},
                 }],
             }), encoding="utf-8")
             (workspace / "hosts.txt").write_text(
-                "10.0.0.1 active-password\n10.0.0.2 disabled-password\n",
+                "198.51.100.1 active-password\n198.51.100.2 disabled-password\n",
                 encoding="utf-8",
             )
             project = workspace / "monitor"
@@ -198,8 +198,8 @@ class ProbeTests(unittest.TestCase):
                 servers = adapter.discover_workspace_servers()
 
             self.assertEqual(len(servers), 2)
-            active = next(server for server in servers if server["host"] == "10.0.0.1")
-            disabled = next(server for server in servers if server["host"] == "10.0.0.2")
+            active = next(server for server in servers if server["host"] == "198.51.100.1")
+            disabled = next(server for server in servers if server["host"] == "198.51.100.2")
             self.assertTrue(active["workspace_enabled"])
             self.assertEqual(active["tags"], ["A3"])
             self.assertFalse(disabled["workspace_enabled"])
