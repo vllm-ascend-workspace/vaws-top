@@ -15,6 +15,16 @@ def _number(name: str, default: int, minimum: int) -> int:
         return default
 
 
+def _paths(name: str) -> tuple[Path, ...]:
+    """Parse an ``os.pathsep``-separated list of file paths from the environment."""
+    raw = os.environ.get(name, "")
+    return tuple(
+        Path(item).expanduser()
+        for item in raw.split(os.pathsep)
+        if item.strip()
+    )
+
+
 @dataclass(frozen=True)
 class Settings:
     project_root: Path
@@ -28,11 +38,18 @@ class Settings:
     max_workers: int
     ssh_timeout: int
     hbm_busy_threshold_mb: int
+    # Optional host sources and credential bootstrap. All are explicit paths or
+    # commands supplied by the operator; nothing is discovered from the
+    # checkout location. See .env.example for the exact contract.
+    inventory_files: tuple[Path, ...] = ()
+    host_pool_files: tuple[Path, ...] = ()
+    bootstrap_command: str | None = None
 
     @classmethod
     def load(cls) -> "Settings":
         project_root = Path(__file__).resolve().parents[2]
         state_dir = Path(os.environ.get("NFM_STATE_DIR", project_root / "data")).expanduser().resolve()
+        bootstrap_command = os.environ.get("NFM_BOOTSTRAP_COMMAND", "").strip() or None
         return cls(
             project_root=project_root,
             state_dir=state_dir,
@@ -45,6 +62,9 @@ class Settings:
             max_workers=_number("NFM_MAX_WORKERS", 8, 1),
             ssh_timeout=_number("NFM_SSH_TIMEOUT_SECONDS", 12, 2),
             hbm_busy_threshold_mb=_number("NFM_HBM_BUSY_THRESHOLD_MB", 8192, 1),
+            inventory_files=_paths("NFM_INVENTORY_FILES"),
+            host_pool_files=_paths("NFM_HOST_POOL_FILES"),
+            bootstrap_command=bootstrap_command,
         )
 
     def prepare(self) -> None:

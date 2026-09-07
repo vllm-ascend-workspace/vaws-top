@@ -22,12 +22,16 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\install-windows-service.ps1
 ```
 
-若监控 worktree 不在主工作区的 Git worktree 集合中，显式指定设备管理能力来源：
+如需自动导入主机清单或启用一次性密码引导，显式传入文件路径和外部命令（含义见 `.env.example`）：
 
 ```powershell
 .\scripts\install-windows-service.ps1 `
-  -SourceWorkspace 'D:\work\vllm-ascend-workspace'
+  -InventoryFiles 'D:\fleet\machine-inventory.json' `
+  -HostPoolFiles 'D:\fleet\hosts.txt' `
+  -BootstrapCommand '{python} D:\fleet\bootstrap.py --host {host} --host-port {port} --user {user} --public-key-file {public_key_file} --password-stdin'
 ```
+
+安装器不会在磁盘或 Git 中搜索这些文件；未传入时服务只监控通过页面手动添加、且已能用监控密钥登录的主机。
 
 安装器会依次完成依赖安装、生产构建、后端测试、配置写入、当前用户登录触发器注册和健康检查。它不要求管理员权限，也不会把服务暴露到局域网。
 
@@ -68,4 +72,4 @@ Set-ExecutionPolicy -Scope Process Bypass
 - Windows OpenSSH 不使用 Unix-domain `ControlMaster` 控制套接字；采集仍使用同一专用 Ed25519 密钥。
 - 首次生成私钥后，服务使用 `icacls` 移除继承权限并只授权当前 Windows 用户读写，满足 Windows OpenSSH 的私钥权限检查。
 - 登录触发器适合本机个人部署：用户登录后自动拉起，异常退出最多每分钟重启一次、连续尝试十次。
-- 一次性密码引导仍依赖 `NFM_SOURCE_WORKSPACE` 指向的主工作区设备管理脚本；已有密钥和手动添加服务器不依赖该入口。
+- 一次性密码引导只在配置了 `-BootstrapCommand`（即 `NFM_BOOTSTRAP_COMMAND`）时可用；密码通过标准输入传给该命令。已有密钥和手动添加服务器不依赖该入口。

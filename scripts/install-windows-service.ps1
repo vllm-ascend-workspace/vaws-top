@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
-    [string]$SourceWorkspace = '',
+    [string[]]$InventoryFiles = @(),
+    [string[]]$HostPoolFiles = @(),
+    [string]$BootstrapCommand = '',
     [string]$StateDir = '',
     [ValidateRange(1, 65535)][int]$WebPort = 8788,
     [ValidateRange(1, 65535)][int]$ApiPort = 8789,
@@ -23,9 +25,8 @@ $npm = Resolve-NfmNpm
 Assert-NfmOpenSsh
 
 if ($WebPort -eq $ApiPort) { throw 'The web and API ports must be different.' }
-if ($SourceWorkspace) {
-    $SourceWorkspace = (Resolve-Path $SourceWorkspace).Path
-}
+$InventoryFiles = @($InventoryFiles | Where-Object { $_ } | ForEach-Object { (Resolve-Path $_).Path })
+$HostPoolFiles = @($HostPoolFiles | Where-Object { $_ } | ForEach-Object { (Resolve-Path $_).Path })
 if (-not $StateDir) {
     $StateDir = Join-Path $projectRoot 'data'
 } elseif (-not [IO.Path]::IsPathRooted($StateDir)) {
@@ -54,7 +55,9 @@ try {
 }
 
 $config = [ordered]@{
-    source_workspace = if ($SourceWorkspace) { $SourceWorkspace } else { $null }
+    inventory_files = $InventoryFiles
+    host_pool_files = $HostPoolFiles
+    bootstrap_command = if ($BootstrapCommand) { $BootstrapCommand } else { $null }
     state_dir = $StateDir
     web_port = $WebPort
     api_port = $ApiPort

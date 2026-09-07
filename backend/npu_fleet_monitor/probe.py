@@ -7,7 +7,7 @@ import subprocess
 import time
 from typing import Any
 
-from .workspace_adapter import WorkspaceDeviceAdapter
+from .device_adapter import DeviceAdapter
 
 
 SECTION = "__NFM_SECTION__"
@@ -329,7 +329,7 @@ def is_device_busy(device: dict[str, Any], hbm_threshold_mb: int) -> bool:
 
 
 class HostProbe:
-    def __init__(self, adapter: WorkspaceDeviceAdapter, timeout: int, hbm_busy_threshold_mb: int = 8192) -> None:
+    def __init__(self, adapter: DeviceAdapter, timeout: int, hbm_busy_threshold_mb: int = 8192) -> None:
         self.adapter = adapter
         self.timeout = timeout
         self.hbm_busy_threshold_mb = hbm_busy_threshold_mb

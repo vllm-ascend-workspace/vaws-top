@@ -3,11 +3,14 @@ from __future__ import annotations
 import base64
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
 
+from npu_fleet_monitor.device_adapter import DeviceAdapter
+from npu_fleet_monitor.inventory import ExternalKeyBootstrap
 from npu_fleet_monitor.probe import (
     attach_npu_telemetry,
     attach_process_details,
@@ -22,7 +25,11 @@ from npu_fleet_monitor.probe import (
     parse_process_details,
     split_sections,
 )
-from npu_fleet_monitor.workspace_adapter import WorkspaceDeviceAdapter
+from npu_fleet_monitor.settings import Settings
+from npu_fleet_monitor.ssh_access import SshAccess
+
+
+PROJECT = Path(__file__).resolve().parents[2]
 
 
 class ProbeTests(unittest.TestCase):
@@ -96,8 +103,8 @@ class ProbeTests(unittest.TestCase):
         }
         self.assertEqual(by_kind["employee_id"], ["x01234567", "abc1234567"])
         self.assertEqual(by_kind["initials"], ["xyz", "pqr", "uv"])
-        q_label = next(label for label in labels if label["value"] == "x01234567")
-        self.assertEqual(q_label["sources"], ["pwd", "container"])
+        x_label = next(label for label in labels if label["value"] == "x01234567")
+        self.assertEqual(x_label["sources"], ["pwd", "container"])
 
     def test_ownership_label_boundaries_reject_overlong_candidates(self) -> None:
         labels = extract_ownership_labels(
@@ -106,10 +113,9 @@ class ProbeTests(unittest.TestCase):
         )
         self.assertEqual(labels, [{"value": "team", "kind": "initials", "sources": ["pwd"]}])
 
-    def test_workspace_npu_parser_is_reused(self) -> None:
+    def test_adapter_uses_bundled_npu_parser_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as state:
-            project = Path(__file__).resolve().parents[2]
-            adapter = WorkspaceDeviceAdapter(project, Path(state))
+            adapter = DeviceAdapter(SshAccess(Path(state), PROJECT))
             parsed = adapter.parse_npu(
                 """
 | NPU Name | Health Power(W) Temp(C) Hugepages-Usage |
@@ -122,22 +128,26 @@ class ProbeTests(unittest.TestCase):
             self.assertEqual(parsed["devices"][0]["aicore_percent"], 55)
             self.assertEqual(parsed["devices"][0]["hbm"]["used_mb"], 32768)
 
+    def test_adapter_accepts_injected_npu_parser(self) -> None:
+        with tempfile.TemporaryDirectory() as state:
+            parser = mock.Mock(return_value={"devices": [{"npu_id": 7}], "process_records": []})
+            adapter = DeviceAdapter(SshAccess(Path(state), PROJECT), npu_parser=parser)
+            self.assertEqual(adapter.parse_npu("info", "usages")["devices"][0]["npu_id"], 7)
+            parser.assert_called_once_with("info", "usages")
+
     def test_control_path_stays_below_unix_socket_limit(self) -> None:
         with tempfile.TemporaryDirectory() as state:
-            project = Path(__file__).resolve().parents[2]
-            adapter = WorkspaceDeviceAdapter(project, Path(state))
-            command = adapter.ssh_base({"host":"198.51.100.1","port":22,"username":"root"})
+            ssh = SshAccess(Path(state), PROJECT, is_windows=False)
+            command = ssh.ssh_base({"host": "198.51.100.1", "port": 22, "username": "root"})
             option = next(command[index + 1] for index, value in enumerate(command) if value == "-o" and command[index + 1].startswith("ControlPath="))
             expanded = option.split("=", 1)[1].replace("%C", "x" * 40)
             self.assertLess(len(expanded), 100)
 
     def test_windows_ssh_omits_unix_control_socket_options(self) -> None:
         with tempfile.TemporaryDirectory() as state:
-            project = Path(__file__).resolve().parents[2]
-            adapter = WorkspaceDeviceAdapter(project, Path(state))
-            adapter.is_windows = True
-            with mock.patch.object(adapter, "ensure_key", return_value=adapter.private_key):
-                command = adapter.ssh_base({"host": "198.51.100.1", "port": 22, "username": "root"})
+            ssh = SshAccess(Path(state), PROJECT, is_windows=True)
+            with mock.patch.object(ssh, "ensure_key", return_value=ssh.private_key):
+                command = ssh.ssh_base({"host": "198.51.100.1", "port": 22, "username": "root"})
             rendered = " ".join(command)
             self.assertNotIn("ControlMaster", rendered)
             self.assertNotIn("ControlPersist", rendered)
@@ -146,65 +156,73 @@ class ProbeTests(unittest.TestCase):
 
     def test_windows_private_key_acl_is_scoped_to_current_user_once(self) -> None:
         with tempfile.TemporaryDirectory() as state:
-            project = Path(__file__).resolve().parents[2]
-            adapter = WorkspaceDeviceAdapter(project, Path(state))
-            adapter.is_windows = True
-            adapter.private_key.parent.mkdir(parents=True)
-            adapter.private_key.write_text("private", encoding="utf-8")
-            adapter.public_key.write_text("public", encoding="utf-8")
+            ssh = SshAccess(Path(state), PROJECT, is_windows=True)
+            ssh.private_key.parent.mkdir(parents=True)
+            ssh.private_key.write_text("private", encoding="utf-8")
+            ssh.public_key.write_text("public", encoding="utf-8")
             responses = [
                 subprocess.CompletedProcess(["whoami"], 0, "DOMAIN\\monitor\n", ""),
                 subprocess.CompletedProcess(["icacls"], 0, "processed", ""),
             ]
-            with mock.patch("npu_fleet_monitor.workspace_adapter.subprocess.run", side_effect=responses) as run:
-                adapter._secure_key_permissions()
-                adapter._secure_key_permissions()
+            with mock.patch("npu_fleet_monitor.ssh_access.subprocess.run", side_effect=responses) as run:
+                ssh._secure_key_permissions()
+                ssh._secure_key_permissions()
             self.assertEqual(run.call_count, 2)
             self.assertEqual(
                 run.call_args_list[1].args[0],
-                ["icacls", str(adapter.private_key), "/inheritance:r", "/grant:r", "DOMAIN\\monitor:(R,W)"],
+                ["icacls", str(ssh.private_key), "/inheritance:r", "/grant:r", "DOMAIN\\monitor:(R,W)"],
             )
 
-    def test_explicit_source_workspace_takes_precedence(self) -> None:
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as state:
-            workspace = Path(root)
-            (workspace / ".agents/skills/machine-management").mkdir(parents=True)
-            project = workspace / "detached-monitor-worktree"
-            project.mkdir()
-            with mock.patch.dict("os.environ", {"NFM_SOURCE_WORKSPACE": str(workspace)}):
-                adapter = WorkspaceDeviceAdapter(project, Path(state))
-            self.assertEqual(adapter.workspace_root, workspace)
-
-    def test_workspace_discovery_includes_disabled_hosts_without_secrets(self) -> None:
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as state:
-            workspace = Path(root)
-            (workspace / ".agents/skills/machine-management").mkdir(parents=True)
-            inventory_dir = workspace / ".vaws-local"
-            inventory_dir.mkdir()
-            (inventory_dir / "machine-inventory.json").write_text(json.dumps({
-                "machines": [{
-                    "alias": "active-a3",
-                    "host": {"ip": "198.51.100.1", "port": 22, "user": "root", "machine_type": "A3"},
-                }],
-            }), encoding="utf-8")
-            (workspace / "hosts.txt").write_text(
-                "198.51.100.1 active-password\n198.51.100.2 disabled-password\n",
-                encoding="utf-8",
+    def test_adapter_has_no_hosts_without_configured_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as state:
+            settings = Settings(
+                project_root=PROJECT, state_dir=Path(state), bind="127.0.0.1", port=1, idle_interval=10,
+                history_interval=5, infrastructure_interval=15, retention_days=1, max_workers=1,
+                ssh_timeout=2, hbm_busy_threshold_mb=1,
             )
-            project = workspace / "monitor"
-            project.mkdir()
-            with mock.patch.dict("os.environ", {"NFM_SOURCE_WORKSPACE": str(workspace)}):
-                adapter = WorkspaceDeviceAdapter(project, Path(state))
-                servers = adapter.discover_workspace_servers()
+            adapter = DeviceAdapter.from_settings(settings)
+            self.assertEqual(adapter.discover_servers(), [])
+            self.assertIsNone(adapter.key_bootstrap)
 
-            self.assertEqual(len(servers), 2)
-            active = next(server for server in servers if server["host"] == "198.51.100.1")
-            disabled = next(server for server in servers if server["host"] == "198.51.100.2")
-            self.assertTrue(active["workspace_enabled"])
-            self.assertEqual(active["tags"], ["A3"])
-            self.assertFalse(disabled["workspace_enabled"])
-            self.assertEqual(disabled["tags"], ["低优先级"])
-            self.assertNotIn("password", json.dumps(servers))
+    def test_password_bootstrap_requires_configured_command(self) -> None:
+        with tempfile.TemporaryDirectory() as state:
+            ssh = SshAccess(Path(state), PROJECT)
+            adapter = DeviceAdapter(ssh)
+            server = {"host": "198.51.100.1", "port": 22, "username": "root"}
+            with (
+                mock.patch.object(ssh, "preflight", return_value={"ok": True}),
+                mock.patch.object(ssh, "key_auth_works", return_value=False),
+                mock.patch.object(ssh, "install_key_with_default_identity", return_value=False),
+            ):
+                result = adapter.bootstrap_with_passwords(server, ["secret"])
+        self.assertFalse(result["ok"])
+        self.assertIn("NFM_BOOTSTRAP_COMMAND", result["error"])
+
+    def test_password_bootstrap_delegates_to_external_command_via_stdin(self) -> None:
+        with tempfile.TemporaryDirectory() as state:
+            ssh = SshAccess(Path(state), PROJECT)
+            bootstrap = ExternalKeyBootstrap(
+                "{python} tool.py install --host {host} --host-port {port} --user {user} --public-key-file {public_key_file}",
+            )
+            adapter = DeviceAdapter(ssh, key_bootstrap=bootstrap)
+            server = {"host": "198.51.100.1", "port": 2222, "username": "ops"}
+            completed = subprocess.CompletedProcess([], 0, "", "")
+            with (
+                mock.patch.object(ssh, "preflight", return_value={"ok": True}),
+                mock.patch.object(ssh, "key_auth_works", side_effect=[False, True]),
+                mock.patch.object(ssh, "install_key_with_default_identity", return_value=False),
+                mock.patch("npu_fleet_monitor.inventory.subprocess.run", return_value=completed) as run,
+            ):
+                result = adapter.bootstrap_with_passwords(server, ["one-time"])
+            self.assertEqual(result, {"ok": True, "method": "external-bootstrap", "attempts": 1})
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[0], sys.executable)
+            self.assertEqual(argv[1:], [
+                "tool.py", "install", "--host", "198.51.100.1", "--host-port", "2222", "--user", "ops",
+                "--public-key-file", str(ssh.public_key),
+            ])
+            self.assertEqual(run.call_args.kwargs["input"], "one-time\n")
+            self.assertNotIn("one-time", " ".join(argv))
 
 
 if __name__ == "__main__":

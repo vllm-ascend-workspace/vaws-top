@@ -6,10 +6,11 @@ import hashlib
 
 from .api import App, AppServer
 from .db import Database
+from .device_adapter import DeviceAdapter
+from .inventory import LOW_PRIORITY_TAG
 from .probe import HostProbe
 from .scheduler import AdaptiveScheduler
 from .settings import Settings
-from .workspace_adapter import LOW_PRIORITY_TAG, WorkspaceDeviceAdapter
 
 
 def main() -> None:
@@ -17,7 +18,7 @@ def main() -> None:
     settings.prepare()
     db = Database(settings.state_dir / "monitor.sqlite3")
     db.initialize()
-    adapter = WorkspaceDeviceAdapter(settings.project_root, settings.state_dir)
+    adapter = DeviceAdapter.from_settings(settings)
     adapter.ensure_key()
     probe = HostProbe(adapter, settings.ssh_timeout, settings.hbm_busy_threshold_mb)
     scheduler = AdaptiveScheduler(settings, db, probe)
@@ -31,12 +32,12 @@ def main() -> None:
     signal.signal(signal.SIGTERM, stop)
     scheduler.start()
 
-    def import_workspace_inventory() -> None:
+    def import_inventory() -> None:
         existing = {
             (item["host"], int(item["port"]), item["username"]): item
             for item in db.list_servers()
         }
-        for item in adapter.discover_workspace_servers():
+        for item in adapter.discover_servers():
             endpoint = (item["host"], int(item["port"]), item["username"])
             server_record = existing.get(endpoint)
             if server_record is None:
@@ -58,10 +59,10 @@ def main() -> None:
             if auth.get("ok"):
                 scheduler.collect_now(server_record["id"])
             else:
-                db.record_failure(server_record["id"], str(auth.get("error") or "工作区密钥不可用"), 0)
+                db.record_failure(server_record["id"], str(auth.get("error") or "监控密钥不可用"), 0)
             existing[endpoint] = server_record
 
-    threading.Thread(target=import_workspace_inventory, name="nfm-inventory-import", daemon=True).start()
+    threading.Thread(target=import_inventory, name="nfm-inventory-import", daemon=True).start()
     print(f"NPU Fleet Monitor: http://{settings.bind}:{settings.port}", flush=True)
     try:
         server.serve_forever(poll_interval=0.5)

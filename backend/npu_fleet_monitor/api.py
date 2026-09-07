@@ -13,9 +13,9 @@ from urllib.parse import parse_qs, urlparse
 
 from .agent_view import AgentQueryError, capacity_candidates, compact_server, find_server, npu_status, server_status
 from .db import Database
+from .device_adapter import DeviceAdapter
 from .scheduler import AdaptiveScheduler
 from .settings import Settings
-from .workspace_adapter import WorkspaceDeviceAdapter
 
 
 RANGES = {
@@ -39,7 +39,7 @@ def normalize_tags(value: Any) -> list[str]:
 
 
 class App:
-    def __init__(self, settings: Settings, db: Database, adapter: WorkspaceDeviceAdapter, scheduler: AdaptiveScheduler) -> None:
+    def __init__(self, settings: Settings, db: Database, adapter: DeviceAdapter, scheduler: AdaptiveScheduler) -> None:
         self.settings = settings
         self.db = db
         self.adapter = adapter

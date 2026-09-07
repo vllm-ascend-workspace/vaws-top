@@ -1,5 +1,5 @@
 [Unit]
-Description=Local Ascend NPU Fleet Monitor
+Description=Local Ascend NPU Fleet Monitor (vaws-top)
 After=network-online.target
 
 [Service]
@@ -13,6 +13,9 @@ Environment=NFM_IDLE_INTERVAL_SECONDS=120
 Environment=NFM_HISTORY_INTERVAL_SECONDS=30
 Environment=NFM_INFRA_INTERVAL_SECONDS=60
 Environment=NFM_HBM_BUSY_THRESHOLD_MB=8192
+# Optional operator configuration (inventory files, host pools, bootstrap
+# command, overrides of the values above). See .env.example.
+EnvironmentFile=-__NFM_PROJECT_ROOT__/.env
 Restart=on-failure
 RestartSec=5
 

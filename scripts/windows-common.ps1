@@ -94,8 +94,14 @@ function Set-NfmProcessEnvironment {
         NFM_HBM_BUSY_THRESHOLD_MB = [string]$Config.hbm_busy_threshold_mb
         NFM_STATE_DIR = [string]$Config.state_dir
     }
-    if ($Config.source_workspace) {
-        $values.NFM_SOURCE_WORKSPACE = [string]$Config.source_workspace
+    if ($Config.PSObject.Properties['inventory_files'] -and $Config.inventory_files) {
+        $values.NFM_INVENTORY_FILES = (@($Config.inventory_files) -join [IO.Path]::PathSeparator)
+    }
+    if ($Config.PSObject.Properties['host_pool_files'] -and $Config.host_pool_files) {
+        $values.NFM_HOST_POOL_FILES = (@($Config.host_pool_files) -join [IO.Path]::PathSeparator)
+    }
+    if ($Config.PSObject.Properties['bootstrap_command'] -and $Config.bootstrap_command) {
+        $values.NFM_BOOTSTRAP_COMMAND = [string]$Config.bootstrap_command
     }
     foreach ($entry in $values.GetEnumerator()) {
         [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
