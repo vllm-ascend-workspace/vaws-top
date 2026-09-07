@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from .agent_view import AgentQueryError, capacity_candidates, compact_server, find_server, npu_status, server_status
+from .agent_view import (
+    AgentQueryError, capacity_candidates, compact_server, find_server, npu_status, observation_envelope,
+    server_status,
+)
 from .db import Database
 from .device_adapter import DeviceAdapter
 from .scheduler import AdaptiveScheduler
@@ -76,9 +79,12 @@ class App:
 
     def agent_servers(self) -> dict[str, Any]:
         snapshots = self.scheduler.snapshots()
+        servers = [compact_server(server, snapshots.get(server["id"])) for server in self.db.list_servers()]
+        oldest = min((row["observed_at"] for row in servers if row["observed_at"] is not None), default=None)
         return {
             "source": "cache",
-            "servers": [compact_server(server, snapshots.get(server["id"])) for server in self.db.list_servers()],
+            "observation": observation_envelope(oldest),
+            "servers": servers,
         }
 
     def _agent_snapshot(
@@ -147,6 +153,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store" if self.path.startswith("/api/") else "public, max-age=300")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
+        if self.path.startswith("/api/"):
+            # The API reports what hosts looked like when they were probed. It
+            # never grants devices; consumers must not treat it as an allocator.
+            self.send_header("X-VAWS-Top-Contract", "observation-only")
         origin = self.headers.get("Origin", "")
         if re.match(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$", origin):
             self.send_header("Access-Control-Allow-Origin", origin)
@@ -184,7 +194,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         if parsed.path == "/api/health":
-            return self.json_response({"status": "ok", "version": "0.1.0", "runtime": self.app.scheduler.runtime_state()})
+            return self.json_response({
+                "status": "ok", "version": "0.1.0", "contract": "observation-only",
+                "runtime": self.app.scheduler.runtime_state(),
+            })
         if parsed.path == "/api/overview":
             return self.json_response(self.app.overview())
         if parsed.path == "/api/agent/servers":

@@ -11,7 +11,15 @@ from vaws_top_client import (
 
 
 def parser() -> argparse.ArgumentParser:
-    result = argparse.ArgumentParser(prog="vaws-top", description="Compact cached NPU fleet status for agents")
+    result = argparse.ArgumentParser(
+        prog="vaws-top",
+        description="Compact observed NPU fleet status for agents",
+        epilog=(
+            "Observation only: every result describes host state at its observed_at timestamp. "
+            "It is not an allocation or reservation source; obtain devices from the host-side "
+            "NPU coordinator queue."
+        ),
+    )
     result.add_argument("--url", help="vaws-top loopback API URL (default: http://127.0.0.1:8789)")
     result.add_argument("--json", action="store_true", help="emit compact JSON")
     sub = result.add_subparsers(dest="command", required=True)
@@ -36,7 +44,7 @@ def parser() -> argparse.ArgumentParser:
     mounts.add_argument("host")
     mounts.add_argument("--live", action="store_true")
     mounts.add_argument("--timeout", type=int, default=30)
-    capacity = sub.add_parser("capacity", help="find fresh cached servers with idle NPUs")
+    capacity = sub.add_parser("capacity", help="list servers whose observed idle-NPU count matches (not a reservation)")
     capacity.add_argument("--min-idle", type=int, default=1)
     capacity.add_argument("--max-age", type=int, default=300)
     capacity.add_argument("--tag", action="append", default=[])

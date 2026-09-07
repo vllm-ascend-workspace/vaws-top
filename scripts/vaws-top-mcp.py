@@ -13,11 +13,16 @@ MODERN_VERSION = "2026-07-28"
 SUPPORTED_VERSIONS = [MODERN_VERSION, LEGACY_VERSION, "2025-06-18", "2025-03-26", "2024-11-05"]
 
 
+CONTRACT_NOTE = (
+    " Observation only: results describe host state at observed_at and are not an "
+    "allocation or reservation source; obtain devices from the host-side NPU coordinator queue."
+)
+
 TOOLS = [
     {
         "name": "npu_status",
-        "title": "NPU status",
-        "description": "Get NPU usage by IP or hostname. Cache mode returns immediately; live mode asks the central collector for one fresh probe.",
+        "title": "NPU status (observed)",
+        "description": "Get observed NPU usage by IP or hostname. Cache mode returns immediately; live mode asks the central collector for one fresh probe." + CONTRACT_NOTE,
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -34,8 +39,8 @@ TOOLS = [
     },
     {
         "name": "server_status",
-        "title": "Server experiment status",
-        "description": "Inspect cached or live NPU, CPU, memory, disks, Docker containers, processes, and likely owners before choosing a server.",
+        "title": "Server status (observed)",
+        "description": "Inspect cached or live NPU, CPU, memory, disks, Docker containers, processes, and likely owners of one server." + CONTRACT_NOTE,
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -50,8 +55,8 @@ TOOLS = [
     },
     {
         "name": "list_mounts",
-        "title": "Server mounts",
-        "description": "List mounted filesystems, capacity, and likely model-weight mount points from cache or a live infrastructure probe.",
+        "title": "Server mounts (observed)",
+        "description": "List mounted filesystems, capacity, and likely model-weight mount points from cache or a live infrastructure probe." + CONTRACT_NOTE,
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -65,8 +70,8 @@ TOOLS = [
     },
     {
         "name": "find_npu_capacity",
-        "title": "Find NPU capacity",
-        "description": "Rank fresh cached servers that satisfy idle-NPU and tag requirements; low-priority hosts sort last.",
+        "title": "Find observed idle NPUs",
+        "description": "Rank fresh cached servers whose observed idle-NPU count and tags match; low-priority hosts sort last. Idle counts are observations that can change at any moment." + CONTRACT_NOTE,
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -81,8 +86,8 @@ TOOLS = [
     },
     {
         "name": "list_npu_servers",
-        "title": "NPU servers",
-        "description": "List monitored servers with cached online and busy-NPU counts.",
+        "title": "NPU servers (observed)",
+        "description": "List monitored servers with cached online and busy-NPU counts." + CONTRACT_NOTE,
         "inputSchema": {"type": "object", "additionalProperties": False},
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     },

@@ -1,13 +1,49 @@
+"""Compact, agent-facing views over collector snapshots.
+
+Everything produced here is *observed state*: what the collector saw on a
+host at ``observed_at``. It is not an allocation ledger. Which NPUs an agent
+may use is decided by the host-side coordinator queue, never by this monitor.
+Every payload therefore carries the same ``observation`` envelope so that a
+consumer cannot mistake a snapshot for a grant.
+"""
+
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import Any
+
+
+OBSERVATION_KIND = "observed_state"
+OBSERVATION_NOTICE = (
+    "Observed host state at observed_at. Not an allocation or reservation source; "
+    "device assignment is decided by the host-side NPU coordinator queue."
+)
 
 
 class AgentQueryError(ValueError):
     def __init__(self, message: str, status: int = 400) -> None:
         super().__init__(message)
         self.status = status
+
+
+def _iso(timestamp: int | float | None) -> str | None:
+    if timestamp is None:
+        return None
+    return datetime.fromtimestamp(int(timestamp), tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def observation_envelope(observed_at: int | float | None, now: int | None = None) -> dict[str, Any]:
+    """Describe when the returned data was observed and what it may be used for."""
+    current_time = int(time.time()) if now is None else now
+    return {
+        "kind": OBSERVATION_KIND,
+        "observed_at": int(observed_at) if observed_at is not None else None,
+        "observed_at_iso": _iso(observed_at),
+        "age_seconds": max(0, current_time - int(observed_at)) if observed_at is not None else None,
+        "allocation_authority": False,
+        "notice": OBSERVATION_NOTICE,
+    }
 
 
 def _percent(used: int | float | None, total: int | float | None) -> float | None:
@@ -47,6 +83,7 @@ def compact_server(server: dict[str, Any], snapshot: dict[str, Any] | None, now:
         "enabled": bool(server.get("enabled")),
         "tags": server.get("tags") or [],
         "status": status,
+        "observed_at": int(collected_at) if collected_at else None,
         "age_seconds": max(0, current_time - int(collected_at)) if collected_at else None,
         "npu_count": summary.get("npu_count") or 0,
         "busy_npu_count": summary.get("busy_npu_count") or 0,
@@ -118,6 +155,7 @@ def npu_status(
         devices.append(row)
     return {
         "source": "cache",
+        "observation": observation_envelope(collected_at, current_time),
         "server": {
             "id": compact["id"], "name": compact["name"], "host": compact["host"],
             "enabled": compact["enabled"], "tags": compact["tags"], "status": compact["status"],
@@ -217,6 +255,7 @@ def capacity_candidates(
             continue
         candidates.append({
             **compact,
+            "observed_at": int(snapshot["collected_at"]),
             "idle_npu_count": idle,
             "aicore_percent": summary.get("npu_util_percent"),
             "hbm_used_mb": summary.get("hbm_used_mb") or 0,
@@ -228,8 +267,21 @@ def capacity_candidates(
     candidates.sort(key=lambda item: (
         "低优先级" in item["tags"], -item["idle_npu_count"], item["age_seconds"], item["host"],
     ))
+    # Each candidate is an observation with its own age; the envelope for the
+    # list as a whole is the oldest snapshot it relied on.
+    oldest = min((snapshots[item["id"]]["collected_at"] for item in candidates), default=None)
     return {
-        "source": "cache", "requirements": {
+        "source": "cache",
+        "observation": {
+            **observation_envelope(oldest, current_time),
+            "kind": "observed_availability",
+            "notice": (
+                "Idle counts are observed at each candidate's observed_at and can change "
+                "before any workload starts. Not a reservation; obtain devices from the "
+                "host-side NPU coordinator queue."
+            ),
+        },
+        "requirements": {
             "min_idle_npus": min_idle_npus, "max_age_seconds": max_age_seconds, "tags": tags or [],
         },
         "candidates": candidates,

@@ -117,6 +117,17 @@ class AgentCliMcpTests(unittest.TestCase):
         self.assertFalse(called["result"]["isError"])
         self.assertEqual(called["result"]["structuredContent"]["source"], "cache")
 
+    def test_every_mcp_tool_declares_observation_only_contract(self) -> None:
+        for tool in MCP.TOOLS:
+            self.assertIn("Observation only", tool["description"], tool["name"])
+            self.assertIn("not an allocation or reservation source", tool["description"], tool["name"])
+            self.assertTrue(tool["annotations"]["readOnlyHint"], tool["name"])
+
+    def test_cli_help_states_observation_only_contract(self) -> None:
+        text = " ".join(CLI.parser().format_help().split())
+        self.assertIn("Observation only", text)
+        self.assertIn("not an allocation or reservation source", text)
+
     def test_modern_mcp_returns_result_type(self) -> None:
         request = {
             "jsonrpc": "2.0", "id": 3, "method": "tools/list",

@@ -4,11 +4,11 @@
 
 Accept a deployment or restart only when:
 
-- the selected worktree is on `vaws-top` and tracked files are clean;
+- the checkout is at the intended commit or tag and tracked files are clean;
 - `package.json`, the platform service installer, and built `dist/client` are present;
 - the managed service is running;
-- `http://127.0.0.1:8789/api/health` returns `status=ok` without using an HTTP proxy;
-- `/api/agent/servers` returns compact JSON with `source=cache`;
+- `http://127.0.0.1:8789/api/health` returns `status=ok` and `contract=observation-only` without using an HTTP proxy;
+- `/api/agent/servers` returns compact JSON with `source=cache` and an `observation` envelope whose `allocation_authority` is `false`;
 - with no browser lease, health reports `mode=idle` and the configured idle interval;
 - API and dashboard listeners remain bound to loopback.
 
@@ -21,6 +21,7 @@ For CLI/MCP changes, validate:
 - backend tests, lint, and production build;
 - one cached CLI query, which must not trigger collection;
 - one bounded live query that returns a newly assigned scheduler snapshot;
+- every agent payload still carries the `observation` envelope and every MCP tool description still states the observation-only contract (`backend/tests/test_agent_view.py`, `backend/tests/test_agent_cli_mcp.py`);
 - one stdio MCP initialize, `tools/list`, and `tools/call` exchange;
 - compact process/container/owner output on an occupied host;
 - compact mount output and complete structured mount data.
