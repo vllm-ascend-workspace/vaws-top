@@ -1,11 +1,9 @@
+import js from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
-import nextVitals from 'eslint-config-next/core-web-vitals';
-import nextTs from 'eslint-config-next/typescript';
+import tseslint from 'typescript-eslint';
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  globalIgnores(['.next/**', 'out/**', 'build/**', 'next-env.d.ts']),
+export default defineConfig([
+  globalIgnores(['vaws_top/static/**', 'dist/**', 'node_modules/**', '.next/**', '.wrangler/**']),
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
 ]);
-
-export default eslintConfig;

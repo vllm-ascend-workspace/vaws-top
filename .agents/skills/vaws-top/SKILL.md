@@ -5,7 +5,7 @@ description: Query observed NPU fleet state through the local vaws-top CLI/MCP, 
 
 # vaws-top
 
-Use the running local monitor as the single *observation* interface for fleet status. Run commands from the vaws-top repository root that contains this Skill.
+Use the running local monitor as the single *observation* interface for fleet status.
 
 ## Boundaries
 
@@ -21,7 +21,7 @@ Use the running local monitor as the single *observation* interface for fleet st
 1. Shortlist hosts that were recently observed with idle NPUs:
 
    ```bash
-   python3 scripts/vaws-top.py capacity --min-idle 4 --max-age 180 --tag A3
+   vaws-top capacity --min-idle 4 --max-age 180 --tag A3
    ```
 
    `idle_npu_count` is an observation that can change before anything starts. It is not a reservation.
@@ -29,7 +29,7 @@ Use the running local monitor as the single *observation* interface for fleet st
 2. Inspect a candidate from cache:
 
    ```bash
-   python3 scripts/vaws-top.py status 192.0.2.21 --cache
+   vaws-top status 192.0.2.21 --cache
    ```
 
    The compact result includes NPU/HBM, CPU, memory, disk pressure, Docker count, grouped NPU processes, containers, extracted employee IDs or initials, and likely model-weight mounts.
@@ -37,7 +37,7 @@ Use the running local monitor as the single *observation* interface for fleet st
 3. Inspect storage when model placement matters:
 
    ```bash
-   python3 scripts/vaws-top.py mounts 192.0.2.21
+   vaws-top mounts 192.0.2.21
    ```
 
    Default text hides pseudo and container-overlay filesystems. JSON/MCP structured results retain the full mount list. `weight_candidate` is a heuristic; it does not recursively scan the remote filesystem.
@@ -45,7 +45,7 @@ Use the running local monitor as the single *observation* interface for fleet st
 4. Immediately before asking the coordinator for devices on a host, refresh only that host so the observation is current:
 
    ```bash
-   python3 scripts/vaws-top.py status 192.0.2.21 --timeout 30
+   vaws-top status 192.0.2.21 --timeout 30
    ```
 
 Do not follow a successful live result with a duplicate raw SSH occupancy query. Do not turn a fresh observation into an assignment yourself; hand the host to the coordinator workflow.
@@ -53,11 +53,11 @@ Do not follow a successful live result with a duplicate raw SSH occupancy query.
 ## CLI routing
 
 ```bash
-python3 scripts/vaws-top.py servers
-python3 scripts/vaws-top.py npu 192.0.2.21
-python3 scripts/vaws-top.py npu 192.0.2.21 --ultra-compact
-python3 scripts/vaws-top.py --json npu 192.0.2.21 --processes
-python3 scripts/vaws-top.py --json npu 192.0.2.21 --process-details
+vaws-top servers
+vaws-top npu 192.0.2.21
+vaws-top npu 192.0.2.21 --ultra-compact
+vaws-top --json npu 192.0.2.21 --processes
+vaws-top --json npu 192.0.2.21 --process-details
 ```
 
 - Add top-level `--json` for stable machine-readable output; it includes the `observation` envelope.
@@ -69,13 +69,11 @@ python3 scripts/vaws-top.py --json npu 192.0.2.21 --process-details
 
 ## MCP routing
 
-Launch the dependency-free stdio server:
-
 ```text
-python3 /absolute/path/to/vaws-top/scripts/vaws-top-mcp.py
+vaws-top mcp
 ```
 
-Set `VAWS_TOP_URL=http://127.0.0.1:8789` only when the default is unsuitable. Route tool calls as follows:
+Set `VAWS_TOP_URL=http://127.0.0.1:8788` only when the default is unsuitable. Route tool calls as follows:
 
 - `find_npu_capacity`: shortlist hosts by observed idle NPUs, snapshot age, and tags; low-priority hosts sort last.
 - `npu_status`: compact per-device utilization/HBM; supports `mode=cache|live`.
@@ -87,9 +85,9 @@ Tool text is concise; prefer `structuredContent` for downstream reasoning and re
 
 ## Service operation
 
-On Linux, install or reconcile the user service with `./scripts/install-user-service.sh`. On Windows, use `scripts/install-windows-service.ps1`. Preserve the ignored `data/` directory across upgrades. Host sources and password bootstrap are configured explicitly through `.env` (see `.env.example`); the service never searches the filesystem for another project.
+Start the local single-process console with `vaws-top serve` (default loopback). Preserve the ignored state directory (`data/` or `NFM_STATE_DIR`) across upgrades. Host sources and password bootstrap are configured explicitly through environment variables (see `.env.example`); the service never searches the filesystem for another project.
 
-Read [references/acceptance.md](references/acceptance.md) when deploying, restarting, changing the Agent interface, or diagnosing health. User-facing CLI/API examples are in [docs/agent-access.md](../../../docs/agent-access.md).
+Read [references/acceptance.md](references/acceptance.md) when starting the console, changing the Agent interface, or diagnosing health. User-facing CLI/API examples are in [docs/agent-access.md](../../../docs/agent-access.md).
 
 ## Result
 

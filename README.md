@@ -1,8 +1,70 @@
 # vaws-top — NPU Fleet Monitor
 
-面向本地独立部署的 Ascend NPU 服务器监控台。它通过宿主机 SSH 无代理采集，重点展示 NPU 利用率、HBM、CPU、系统内存、磁盘、挂载点和 Docker 容器，并以 SQLite 保存历史数据。
+面向本机单用户的 Ascend NPU 监控台。它通过宿主机 SSH 无代理采集，重点展示 NPU 利用率、HBM、CPU、系统内存、磁盘、挂载点和 Docker 容器，并以 SQLite 保存历史数据。用 `uvx` 在本机拉起，只服务自己，不对外提供托管服务。
 
 **vaws-top 只观测，不分配。** 它不是设备分配权威：哪些 NPU 可以被使用，由宿主机侧的 NPU 协调器队列决定。vaws-top 的所有 Agent 接口都把数据标注为"带观测时间戳的观测状态"，并明确声明不得据此做设备分配决策。详见 [docs/agent-access.md](docs/agent-access.md) 与 [docs/architecture.md](docs/architecture.md)。
+
+## 安装与启动
+
+唯一版本号来自 `pyproject.toml` 的 `0.1.0`。MCP `serverInfo.version` 读取 `importlib.metadata.version("vaws-top")`；`package.json` 的 version 与之相同。
+
+### 推荐：GitHub Release wheel（无需本机 Node）
+
+Release 资产里的 wheel 已打入前端构建产物。私有仓库下载需要已登录的 `gh` 或 `GITHUB_TOKEN`。
+
+```bash
+gh release download v0.1.0 -R vllm-ascend-workspace/vaws-top -p '*.whl'
+uvx --from ./vaws_top-0.1.0-py3-none-any.whl vaws-top serve
+```
+
+或在已具备仓库读权限的环境里直接指向资产 URL：
+
+```bash
+uvx --from "https://github.com/vllm-ascend-workspace/vaws-top/releases/download/v0.1.0/vaws_top-0.1.0-py3-none-any.whl" vaws-top serve
+```
+
+浏览器访问 `http://127.0.0.1:8788`。`vaws-top serve` 单进程同时提供 HTTP API 与静态前端，默认只绑 loopback。`python -m vaws_top` 与 `vaws-top` 等价。
+
+### 开发者路径：从 git 构建（需要 Node.js 22.13+）
+
+`uvx --from git+…` 会在本机执行 hatch 构建。构建 hook 在缺少前端产物时会跑 `npm ci && npm run build`，没有 Node 会得到一个不含静态资源的 wheel，`vaws-top serve` 会立刻报错而不是 404。
+
+```bash
+uvx --from git+https://github.com/vllm-ascend-workspace/vaws-top@main vaws-top serve
+```
+
+源码树里也可以显式串起两步：
+
+```bash
+git clone https://github.com/vllm-ascend-workspace/vaws-top.git
+cd vaws-top
+./scripts/build_wheel.sh
+```
+
+### MCP
+
+`.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "vaws-top": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "https://github.com/vllm-ascend-workspace/vaws-top/releases/download/v0.1.0/vaws_top-0.1.0-py3-none-any.whl",
+        "vaws-top",
+        "mcp"
+      ],
+      "env": {
+        "VAWS_TOP_URL": "http://127.0.0.1:8788"
+      }
+    }
+  }
+}
+```
+
+开发者可用 `git+https://github.com/vllm-ascend-workspace/vaws-top@<ref>` 替换 `--from` 的 wheel URL。五个工具见 [docs/agent-access.md](docs/agent-access.md)。
 
 ## 主要能力
 
@@ -25,89 +87,54 @@
 
 ## 依赖与目录
 
-依赖 Node.js 22.13+、Python 3.11+、系统 OpenSSH 客户端和 `ssh-keygen`。后端只使用 Python 标准库，不依赖 `torch`/`torch_npu`，本地无 NPU 也可运行全部后端测试。支持 Linux systemd user service 和 Windows 原生任务计划程序两种持续运行方式。
+运行时需要 Python 3.11+、系统 OpenSSH 客户端和 `ssh-keygen`。后端只使用 Python 标准库，不依赖 `torch`/`torch_npu`。构建 wheel 或从 git 安装时才需要 Node.js 22.13+。
 
 ```text
-app/            Next.js 前端（vinext 构建）
-backend/        Python 后端：API、采集调度、npu-smi 解析、SSH 访问、清单导入
-backend/tests/  标准库 unittest
-deploy/         systemd user unit 模板
-scripts/        启动/安装脚本、Agent CLI (vaws-top.py) 与 MCP server (vaws-top-mcp.py)
-docs/           架构、Agent 接口、Windows 部署、HANDOFF
+vaws_top/       Python 包：HTTP API、采集调度、npu-smi 解析、SSH、CLI、MCP
+vaws_top/static/  前端构建产物（gitignore，由 npm run build 写入 wheel）
+app/            前端源码（Vite 静态 SPA）
+tests/          标准库 unittest，针对安装后的 vaws_top 包
+scripts/        build_wheel.sh：npm ci && npm run build && uv build
+docs/           架构与 Agent 接口
 .agents/skills/ 随仓库分发的 Agent Skill
 ```
 
-运行时私有状态保存在 `data/`：SQLite、专用密钥、`known_hosts` 和 SSH 控制套接字。该目录已忽略，不会进入 Git。
+运行时私有状态默认写在当前工作目录的 `data/`：SQLite、专用密钥、`known_hosts` 和 SSH 控制套接字。用 `NFM_STATE_DIR` 改位置。该目录已忽略，不会进入 Git。
 
 ## 配置
 
-vaws-top 是一个普通的独立仓库，不会在磁盘或 Git 中搜索其他项目。所有外部输入都通过环境变量显式给出，模板见 [`.env.example`](.env.example)；Linux 的 systemd unit 会自动加载仓库根目录的 `.env`，Windows 安装器把同样的值写入 `data\windows-service.json`。
+所有外部输入都通过环境变量显式给出，模板见 [`.env.example`](.env.example)。
 
 | 变量 | 作用 |
 |------|------|
 | `NFM_INVENTORY_FILES` | JSON 主机清单（`{"machines": [{"alias", "host": {"ip", "port", "user", "machine_type"}}]}`），多个路径用平台路径分隔符连接；其中的主机作为活动主机导入 |
 | `NFM_HOST_POOL_FILES` | 纯文本主机池，每行取第一个字段；仅出现在这里的主机带"低优先级"标签 |
 | `NFM_BOOTSTRAP_COMMAND` | 可选外部命令模板，用一次性密码安装监控公钥；占位符 `{host} {port} {user} {public_key_file} {python}`，密码经 stdin 传入。未配置时只支持已有密钥登录 |
-| `NFM_STATE_DIR` | 私有状态目录，默认 `data/` |
+| `NFM_STATE_DIR` | 私有状态目录，默认当前目录下的 `data/` |
 | 其余 `NFM_*` | 监听地址/端口、采集周期、保留天数、HBM 判忙阈值 |
 
 自动导入只读取清单中的宿主机地址、端口、用户和机器类型；不会采用容器端口，也不会创建或修改容器。已有数据库记录优先，不会在每次启动时重命名用户维护的服务器。
 
-## 本地运行
+## CLI
 
 ```bash
-git clone https://github.com/vllm-ascend-workspace/vaws-top.git
-cd vaws-top
-cp .env.example .env   # 按需填写清单路径和引导命令
+vaws-top serve
+vaws-top serve --port 9876
+vaws-top mcp
+vaws-top npu 192.0.2.21
+vaws-top servers
+vaws-top status 192.0.2.21
+vaws-top mounts 192.0.2.21
+vaws-top capacity --min-idle 4
+```
+
+开发时分别跑前端热更新（Vite 把 `/api` 代理到本机 `vaws-top serve`）：
+
+```bash
+vaws-top serve --port 8788
 npm ci
-npm run build
-npm run test:backend
-npm run serve:local
+npm run dev
 ```
-
-浏览器访问 `http://127.0.0.1:8788`。前端服务将 `/api/*` 固定代理到回环地址的后端端口 `8789`。
-
-Agent 可直接查询已采集的缓存：
-
-```bash
-python3 scripts/vaws-top.py npu 192.0.2.21
-```
-
-开发时分别运行：
-
-```bash
-PYTHONPATH=backend python3 -m npu_fleet_monitor
-npm run dev -- --hostname 127.0.0.1
-```
-
-## 持续运行
-
-若当前 Linux 用户已启用 systemd user manager，在仓库根目录执行：
-
-```bash
-./scripts/install-user-service.sh
-```
-
-安装脚本把仓库绝对路径写入 unit，并让 unit 通过 `EnvironmentFile` 读取仓库根目录的 `.env`。检查：
-
-```bash
-systemctl --user status npu-fleet-monitor
-journalctl --user -u npu-fleet-monitor -f
-```
-
-部署脚本不会修改远程服务器上的系统配置，只会在目标 SSH 用户的 `authorized_keys` 中幂等加入监控公钥。
-
-### Windows
-
-在仓库根目录的普通 PowerShell 中运行：
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\install-windows-service.ps1
-.\scripts\manage-windows-service.ps1 status
-```
-
-Windows 版本使用当前用户的任务计划程序在登录后启动，异常退出自动重试，仍然只监听 `127.0.0.1`。无需 NSSM、Docker Desktop 或 WSL；完整安装、参数、日志和卸载说明见 [Windows 原生部署](docs/windows-deployment.md)。
 
 ## 批量格式
 
@@ -124,16 +151,17 @@ example-a3-01, 192.0.2.21, 22, root, A3|训练
 
 ## 与 vllm-ascend-workspace 的关系
 
-本仓库从 `vllm-ascend-workspace` 脚手架的 `vaws-top` 分支拆出，保留了完整提交历史。脚手架侧的 `npu-fleet-monitor` Skill 负责克隆、构建并管理本仓库的本地服务；需要在脚手架侧做的改动列在 [docs/HANDOFF.md](docs/HANDOFF.md)。本仓库本身不依赖脚手架的任何文件或目录布局。
+本仓库从 `vllm-ascend-workspace` 脚手架拆出。脚手架侧如需拉起本机监控台，应安装本仓库的 wheel 或 `uvx` 调用 `vaws-top serve`，不要再部署成常驻多用户服务。本仓库本身不依赖脚手架的任何文件或目录布局。
 
 ## 测试与 CI
 
 ```bash
-npm run test:backend        # 等价于 PYTHONPATH=backend python3 -m unittest discover -s backend/tests -v
-python3 scripts/run-backend-tests.py
+python3 -m pip install .
+python3 -m unittest discover -s tests -v
+npm ci && npm run lint && npm run build
 ```
 
-GitHub Actions（`.github/workflows/ci.yml`）在 Python 3.11 与 3.12 上运行后端测试。
+GitHub Actions 在 Python 3.11/3.12 上对**已安装的包**跑后端测试，并跑前端 lint/build 以及带静态资源的 wheel 构建。打 `v*` tag 时把 wheel 上传为 GitHub Release 资产。
 
 ## 设计来源
 

@@ -1,6 +1,6 @@
 # Agent CLI 与 MCP
 
-`vaws-top` 将 Agent 查询统一交给常驻采集器。默认 `cache` 模式立即读取内存快照，不建立 SSH；显式 `live` 模式由采集器发起一次集中探查并等待新快照。Agent 无需自行拼接 SSH 命令，也不会接触远程密码或监控密钥。
+`vaws-top` 将 Agent 查询统一交给本机 `vaws-top serve` 进程。默认 `cache` 模式立即读取内存快照，不建立 SSH；显式 `live` 模式由采集器发起一次集中探查并等待新快照。Agent 无需自行拼接 SSH 命令，也不会接触远程密码或监控密钥。
 
 ## 只观测，不分配
 
@@ -23,18 +23,16 @@ vaws-top 是**观测面**，不是设备分配权威。每个响应描述的都�
 
 ## CLI
 
-在仓库根目录运行：
-
 ```bash
-python3 scripts/vaws-top.py servers
-python3 scripts/vaws-top.py npu 192.0.2.21
-python3 scripts/vaws-top.py npu 192.0.2.21 --live
-python3 scripts/vaws-top.py npu 192.0.2.21 --ultra-compact
-python3 scripts/vaws-top.py --json npu 192.0.2.21 --processes
-python3 scripts/vaws-top.py status 192.0.2.21
-python3 scripts/vaws-top.py status 192.0.2.21 --cache
-python3 scripts/vaws-top.py mounts 192.0.2.21 --live
-python3 scripts/vaws-top.py capacity --min-idle 4 --max-age 180 --tag A3
+vaws-top servers
+vaws-top npu 192.0.2.21
+vaws-top npu 192.0.2.21 --live
+vaws-top npu 192.0.2.21 --ultra-compact
+vaws-top --json npu 192.0.2.21 --processes
+vaws-top status 192.0.2.21
+vaws-top status 192.0.2.21 --cache
+vaws-top mounts 192.0.2.21 --live
+vaws-top capacity --min-idle 4 --max-age 180 --tag A3
 ```
 
 默认输出只保留状态、缓存年龄、忙闲卡数、AICore、HBM、进程数和归属：
@@ -49,20 +47,25 @@ python3 scripts/vaws-top.py capacity --min-idle 4 --max-age 180 --tag A3
 
 `status` 汇总 NPU、CPU、内存、磁盘、Docker、占用进程/容器及可能的工号或姓名缩写；`mounts` 返回挂载源、文件系统、容量，并标出可能存放模型权重的挂载点；`capacity` 从新鲜缓存中筛选观测到满足空闲 NPU 数量和标签的机器，低优先级服务器排在最后。
 
-默认 API 是 `http://127.0.0.1:8789`，可通过 `--url` 或 `VAWS_TOP_URL` 修改为其他回环端口。为避免误将无认证接口暴露到网络，非回环 URL 默认拒绝。
+默认 API 是 `http://127.0.0.1:8788`，可通过 `--url` 或 `VAWS_TOP_URL` 修改为其他回环端口。为避免误将无认证接口暴露到网络，非回环 URL 默认拒绝。
 
 ## MCP
 
 MCP server 使用标准输入输出传输，后端仍通过同一回环缓存 API 取数：
 
-```toml
-[mcp_servers.vaws_top]
-command = "python3"
-args = ["/absolute/path/to/vaws-top/scripts/vaws-top-mcp.py"]
-env = { VAWS_TOP_URL = "http://127.0.0.1:8789" }
+```json
+{
+  "mcpServers": {
+    "vaws-top": {
+      "command": "vaws-top",
+      "args": ["mcp"],
+      "env": { "VAWS_TOP_URL": "http://127.0.0.1:8788" }
+    }
+  }
+}
 ```
 
-Windows 可将 `command` 换成已安装的 `python.exe` 绝对路径。服务提供五个只读工具，每个工具的描述都声明了 observation-only 契约：
+服务提供五个只读工具，每个工具的描述都声明了 observation-only 契约：
 
 - `npu_status(host, mode?, include_processes?, process_details?, max_age_seconds?)`
 - `server_status(host, mode?, process_details?, timeout_seconds?)`

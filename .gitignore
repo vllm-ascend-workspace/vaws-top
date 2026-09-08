@@ -6,5 +6,9 @@ data/
 *.log
 __pycache__/
 *.py[cod]
+*.egg-info/
+build/
+.venv/
 .env
 .env.local
+vaws_top/static/
