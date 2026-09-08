@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
-from vaws_top_client import ClientError, VawsTopClient, format_capacity, format_mounts, format_npu, format_server, format_servers
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+
+from npu_fleet_monitor import SERVICE_API_VERSION  # noqa: E402
+from vaws_top_client import ClientError, VawsTopClient, format_capacity, format_mounts, format_npu, format_server, format_servers  # noqa: E402
 
 
 LEGACY_VERSION = "2025-11-25"
@@ -117,14 +121,20 @@ def handle_request(request: dict[str, Any], client: VawsTopClient) -> dict[str, 
             result = {
                 "protocolVersions": SUPPORTED_VERSIONS,
                 "serverInfo": {"name": "vaws-top", "version": "0.2.0"},
-                "capabilities": {"tools": {"listChanged": False}},
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                    "experimental": {"vaws-top": {"service_api_version": SERVICE_API_VERSION}},
+                },
             }
         elif method == "initialize":
             requested = request.get("params", {}).get("protocolVersion", LEGACY_VERSION)
             version = requested if requested in SUPPORTED_VERSIONS else LEGACY_VERSION
             result = {
                 "protocolVersion": version,
-                "capabilities": {"tools": {"listChanged": False}},
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                    "experimental": {"vaws-top": {"service_api_version": SERVICE_API_VERSION}},
+                },
                 "serverInfo": {"name": "vaws-top", "version": "0.2.0"},
             }
         elif method == "ping":
