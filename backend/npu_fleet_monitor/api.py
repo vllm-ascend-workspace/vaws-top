@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from . import SERVICE_API_VERSION
 from .agent_view import (
     AgentQueryError, capacity_candidates, compact_server, find_server, npu_status, observation_envelope,
     server_status,
@@ -196,6 +197,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/health":
             return self.json_response({
                 "status": "ok", "version": "0.1.0", "contract": "observation-only",
+                "service_api_version": SERVICE_API_VERSION,
                 "runtime": self.app.scheduler.runtime_state(),
             })
         if parsed.path == "/api/overview":
