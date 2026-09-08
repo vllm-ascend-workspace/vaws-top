@@ -21,19 +21,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      # The backend is stdlib-only and must stay runnable without torch,
-      # torch_npu or NPU hardware; nothing is installed here on purpose.
-      - name: Run backend unit tests
-        run: python3 scripts/run-backend-tests.py
+      - name: Install package
+        run: python3 -m pip install .
+      - name: Run backend unit tests against the installed package
+        working-directory: ${{ runner.temp }}
+        run: python3 -m unittest discover -s "${{ github.workspace }}/tests" -v
 
   frontend-build:
-    # The dashboard build depends on pre-release packages (vinext beta,
-    # Cloudflare/OpenAI Vite plugins) fetched from the public npm registry. It
-    # needs network access and is slower and less deterministic than the
-    # backend suite, so it runs as a separate job and does not gate the
-    # backend result. If it turns out to be flaky, drop it rather than mark
-    # it `continue-on-error`.
-    name: frontend build
+    name: frontend lint and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,3 +39,22 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run lint
       - run: npm run build
+
+  package:
+    name: wheel with frontend assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: uv build
+      - name: Confirm frontend assets are in the wheel
+        run: unzip -l dist/*.whl | grep static | head

@@ -2,10 +2,10 @@
 
 ```text
 Browser (127.0.0.1:8788)
-  ├─ dashboard + history + server onboarding
-  └─ /api proxy
-        ↓ loopback only
-Python API / adaptive scheduler (127.0.0.1:8789)
+  ├─ static dashboard + history + server onboarding
+  └─ same-origin /api/*
+        ↓ loopback only, single process
+vaws-top serve (HTTP API + AdaptiveScheduler)
   ├─ viewer leases: fastest of 1s / 5s / 10s / 30s
   ├─ idle fallback: 120s
   ├─ history write floor: 30s
@@ -21,7 +21,7 @@ Bare-metal NPU hosts
 
 ## Host access and inventory
 
-`DeviceAdapter` (`backend/npu_fleet_monitor/device_adapter.py`) is the composition root for everything that touches a host. It is assembled from injected parts and holds no knowledge of where the monitor is checked out or which project manages the fleet:
+`DeviceAdapter` (`vaws_top/device_adapter.py`) is the composition root for everything that touches a host. It is assembled from injected parts and holds no knowledge of where the monitor is installed or which project manages the fleet:
 
 - `SshAccess` owns the monitor's dedicated Ed25519 key, its isolated `known_hosts`, and the OpenSSH options used for probes.
 - `npu_smi` parses `npu-smi info` and `npu-smi info -t usages` output. It is bundled and unit-tested here; no external parser is imported at runtime.
@@ -41,7 +41,7 @@ The contract is made explicit in the interface rather than left to documentation
 - Every `/api/agent/*` payload carries an `observation` envelope (`agent_view.observation_envelope`) with `kind`, `observed_at`, `observed_at_iso`, `age_seconds`, `allocation_authority: false` and a human-readable `notice`. `compact_server` rows and capacity candidates carry their own `observed_at`.
 - `/api/agent/capacity` uses `kind: observed_availability`; its `observed_at` is the oldest snapshot the list relied on, and its notice states that idle counts are not reservations.
 - All `/api/` responses send `X-VAWS-Top-Contract: observation-only`; `/api/health` reports `contract: observation-only`.
-- Every MCP tool description and the CLI help end with the same statement; `backend/tests/test_agent_cli_mcp.py` fails if a tool drops it.
+- Every MCP tool description and the CLI help end with the same statement; `tests/test_agent_cli_mcp.py` fails if a tool drops it.
 
 Fields that are inherently allocation-shaped and therefore deserve extra care in consumers: `busy` / `busy_npu_count` / `idle_npu_count` (derived from processes, AICore and an HBM threshold at probe time), the `capacity` endpoint and `find_npu_capacity` tool (a ranked shortlist), and the derived `低优先级` tag (inventory membership, not a policy grant). The monitor does not integrate with the coordinator and does not know about leases; it keeps these fields because they are useful observations, and labels them so they cannot be mistaken for grants.
 
@@ -51,9 +51,9 @@ Fast collection reads CPU counters, load, memory and NPU state. CPU percentage i
 
 An NPU is busy when the host process table reports an owner, AICore utilization exceeds 1%, or HBM exceeds the configurable fallback threshold. The default is 8192 MB because the observed A3 fleet carries roughly 6 GB of idle driver HBM per device; the fallback therefore catches opaque cross-container occupancy without classifying driver overhead as a workload.
 
-Each cycle is non-overlapping: a new cycle is scheduled only after the previous one finishes. Host probes run in a bounded thread pool, and OpenSSH `ControlPersist` reuses authenticated connections. Its control socket uses a short project-relative path so a deeply nested checkout cannot exceed the Unix-domain socket path limit. If a 1-second cycle cannot finish within one second, the system naturally runs at the achievable rate instead of creating a backlog.
+Each cycle is non-overlapping: a new cycle is scheduled only after the previous one finishes. Host probes run in a bounded thread pool, and OpenSSH `ControlPersist` reuses authenticated connections. Its control socket uses a short path under the state directory so a deeply nested checkout cannot exceed the Unix-domain socket path limit. If a 1-second cycle cannot finish within one second, the system naturally runs at the achievable rate instead of creating a backlog.
 
-On native Windows, the OpenSSH client does not use Unix-domain control sockets, so `ControlMaster`, `ControlPersist`, and `ControlPath` are omitted while all other host-key, identity, timeout, and keepalive controls remain active. The Windows installer runs the same Python supervisor under a per-user scheduled task triggered at logon; both processes continue to bind loopback only. The generated private key receives an explicit current-user-only Windows ACL.
+On native Windows, the OpenSSH client does not use Unix-domain control sockets, so `ControlMaster`, `ControlPersist`, and `ControlPath` are omitted while all other host-key, identity, timeout, and keepalive controls remain active. The generated private key receives an explicit current-user-only Windows ACL.
 
 ## Persistence
 
