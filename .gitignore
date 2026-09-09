@@ -9,6 +9,7 @@ __pycache__/
 *.egg-info/
 build/
 .venv/
+.venv-wheel/
 .env
 .env.local
 vaws_top/static/
