@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
+import vaws_top
 from vaws_top import cli as CLI
 from vaws_top import mcp as MCP
 from vaws_top.client import ClientError, VawsTopClient, format_mounts, format_npu, format_server
@@ -136,7 +137,7 @@ class AgentCliMcpTests(unittest.TestCase):
                 FakeClient(),
             )
             self.assertEqual(response["result"]["serverInfo"]["name"], "vaws-top")
-            self.assertEqual(response["result"]["serverInfo"]["version"], "0.1.0")
+            self.assertEqual(response["result"]["serverInfo"]["version"], vaws_top.__version__)
             self.assertNotIn("experimental", response["result"]["capabilities"])
 
 
