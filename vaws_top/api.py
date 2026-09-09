@@ -391,9 +391,20 @@ class Handler(BaseHTTPRequestHandler):
         self._write(body)
 
 
+LOOPBACK_BINDS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+def require_loopback_bind(host: str) -> str:
+    """Refuse a non-loopback listen address. The console is local-only."""
+    if host not in LOOPBACK_BINDS:
+        raise ValueError(f"vaws-top binds loopback only, refused {host!r}")
+    return host
+
+
 class AppServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, address: tuple[str, int], app: App) -> None:
-        super().__init__(address, Handler)
+        host, port = address
+        super().__init__((require_loopback_bind(host), port), Handler)
         self.app = app
