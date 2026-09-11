@@ -26,6 +26,7 @@ class SchedulerTests(unittest.TestCase):
             self.assertEqual(scheduler.effective_interval(), 10)
             scheduler.heartbeat("viewer_00000001", 10, False)
             self.assertEqual(scheduler.effective_interval(), 120)
+            db.close()
 
     def test_live_query_waits_for_a_new_snapshot_and_requests_infrastructure(self) -> None:
         with tempfile.TemporaryDirectory() as state:
@@ -49,6 +50,7 @@ class SchedulerTests(unittest.TestCase):
                 scheduler._condition.notify_all()  # noqa: SLF001
             thread.join(timeout=1)
             self.assertEqual(result["collected_at"], 2)
+            db.close()
 
 
 if __name__ == "__main__":

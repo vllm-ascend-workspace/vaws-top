@@ -404,6 +404,12 @@ def require_loopback_bind(host: str) -> str:
 class AppServer(ThreadingHTTPServer):
     daemon_threads = True
 
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.app.db.close()
+
     def __init__(self, address: tuple[str, int], app: App) -> None:
         host, port = address
         super().__init__((require_loopback_bind(host), port), Handler)

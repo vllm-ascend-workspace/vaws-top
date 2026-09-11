@@ -84,6 +84,13 @@ class Database:
         connection.execute("PRAGMA optimize")
         connection.commit()
 
+    def close(self) -> None:
+        """Release this thread's connection, including Windows file handles."""
+        connection = getattr(self._local, "connection", None)
+        if connection is not None:
+            connection.close()
+            del self._local.connection
+
     @staticmethod
     def _server(row: sqlite3.Row) -> dict[str, Any]:
         result = dict(row)
