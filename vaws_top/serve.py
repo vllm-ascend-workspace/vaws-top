@@ -71,6 +71,7 @@ def main() -> None:
     finally:
         scheduler.stop()
         server.server_close()
+        db.close()
 
 
 if __name__ == "__main__":

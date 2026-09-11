@@ -338,17 +338,26 @@ class HostProbe:
         self._process_cache: dict[str, dict[int, dict[str, Any]]] = {}
         self._preflighted: set[str] = set()
 
+    def _run_script(self, server: dict[str, Any], script: str, timeout: int) -> subprocess.CompletedProcess[str]:
+        # Text-mode stdin translates LF to CRLF on Windows, which corrupts
+        # shell options and heredocs. Keep the SSH wire format UTF-8 bytes.
+        result = subprocess.run(
+            [*self.adapter.ssh_base(server), "bash", "-s"],
+            input=script.replace("\r\n", "\n").encode("utf-8"),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=timeout, check=False, cwd=self.adapter.project_root,
+        )
+        return subprocess.CompletedProcess(
+            result.args, result.returncode,
+            result.stdout.decode("utf-8", errors="replace"),
+            result.stderr.decode("utf-8", errors="replace"),
+        )
+
     def _collect_process_details(self, server: dict[str, Any], pids: list[int]) -> dict[int, dict[str, Any]]:
         if not pids:
             return {}
         try:
-            result = subprocess.run(
-                [*self.adapter.ssh_base(server), "bash", "-s"],
-                input=build_process_detail_script(pids),
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                timeout=min(self.timeout, 15), check=False,
-                cwd=self.adapter.project_root,
-            )
+            result = self._run_script(server, build_process_detail_script(pids), min(self.timeout, 15))
         except (OSError, subprocess.TimeoutExpired):
             return {}
         if result.returncode != 0:
@@ -367,12 +376,7 @@ class HostProbe:
         # explicit npu_info_rc health gate above.
         script = FAST_SCRIPT + (INFRA_SCRIPT if include_infrastructure else "") + "\nexit 0\n"
         try:
-            result = subprocess.run(
-                [*self.adapter.ssh_base(server), "bash", "-s"], input=script,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                timeout=self.timeout + (12 if include_infrastructure else 0), check=False,
-                cwd=self.adapter.project_root,
-            )
+            result = self._run_script(server, script, self.timeout + (12 if include_infrastructure else 0))
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError(f"SSH 探查超时（{exc.timeout:g}s）") from exc
         if result.returncode != 0:

@@ -105,6 +105,7 @@ def console(*, web_root: Path | None = None, seed_server: bool = True):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+            db.close()
 
 
 def _request(host: str, port: int, method: str, path: str, body: bytes | None = None, content_type: str | None = None):
@@ -150,6 +151,7 @@ class LoopbackBindTests(unittest.TestCase):
             with self.assertRaises(ValueError) as caught:
                 AppServer(("0.0.0.0", 0), app)
             self.assertIn("0.0.0.0", str(caught.exception))
+            db.close()
 
     def test_default_settings_bind_is_loopback(self) -> None:
         isolated = {key: value for key, value in os.environ.items() if key != "NFM_BIND"}

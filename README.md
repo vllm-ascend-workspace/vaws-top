@@ -6,21 +6,21 @@
 
 ## 安装与启动
 
-唯一版本号来自 `pyproject.toml` 的 `0.1.0`。MCP `serverInfo.version` 读取 `importlib.metadata.version("vaws-top")`；`package.json` 的 version 与之相同。
+唯一版本号来自 `pyproject.toml` 的 `0.1.2`。MCP `serverInfo.version` 读取 `importlib.metadata.version("vaws-top")`；`package.json` 的 version 与之相同。
 
 ### 推荐：GitHub Release wheel（无需本机 Node）
 
 Release 资产里的 wheel 已打入前端构建产物。私有仓库下载需要已登录的 `gh` 或 `GITHUB_TOKEN`。
 
 ```bash
-gh release download v0.1.0 -R vllm-ascend-workspace/vaws-top -p '*.whl'
-uvx --from ./vaws_top-0.1.0-py3-none-any.whl vaws-top serve
+gh release download v0.1.2 -R vllm-ascend-workspace/vaws-top -p '*.whl'
+uvx --from ./vaws_top-0.1.2-py3-none-any.whl vaws-top serve
 ```
 
 或在已具备仓库读权限的环境里直接指向资产 URL：
 
 ```bash
-uvx --from "https://github.com/vllm-ascend-workspace/vaws-top/releases/download/v0.1.0/vaws_top-0.1.0-py3-none-any.whl" vaws-top serve
+uvx --from "https://github.com/vllm-ascend-workspace/vaws-top/releases/download/v0.1.2/vaws_top-0.1.2-py3-none-any.whl" vaws-top serve
 ```
 
 浏览器访问 `http://127.0.0.1:8788`。`vaws-top serve` 单进程同时提供 HTTP API 与静态前端，默认只绑 loopback。`python -m vaws_top` 与 `vaws-top` 等价。
@@ -52,7 +52,7 @@ cd vaws-top
       "command": "uvx",
       "args": [
         "--from",
-        "https://github.com/vllm-ascend-workspace/vaws-top/releases/download/v0.1.0/vaws_top-0.1.0-py3-none-any.whl",
+        "https://github.com/vllm-ascend-workspace/vaws-top/releases/download/v0.1.2/vaws_top-0.1.2-py3-none-any.whl",
         "vaws-top",
         "mcp"
       ],
